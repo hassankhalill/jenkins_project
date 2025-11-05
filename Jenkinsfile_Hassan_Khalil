@@ -1,0 +1,126 @@
+pipeline {
+    agent any
+
+    environment {
+        VIRTUAL_ENV = 'venv'
+        PYTHON_PATH = "${env.WORKSPACE}\\${VIRTUAL_ENV}\\Scripts"
+    }
+
+    stages {
+        stage('Setup') {
+            steps {
+                script {
+                    echo "Setting up Python virtual environment..."
+                    bat """
+                        if not exist ${VIRTUAL_ENV} (
+                            python -m venv ${VIRTUAL_ENV}
+                        )
+                        ${PYTHON_PATH}\\pip install -r requirements.txt
+                    """
+                }
+            }
+        }
+
+        stage('Lint') {
+            steps {
+                script {
+                    echo "Running flake8 linter..."
+                    bat """
+                        ${PYTHON_PATH}\\flake8 app.py --max-line-length=120
+                    """
+                }
+            }
+        }
+
+        stage('Test') {
+            steps {
+                script {
+                    echo "Running unit tests with pytest..."
+                    bat """
+                        ${PYTHON_PATH}\\pytest tests/ -v
+                    """
+                }
+            }
+        }
+
+        stage('Coverage') {
+            steps {
+                script {
+                    echo "Running code coverage analysis..."
+                    bat """
+                        ${PYTHON_PATH}\\coverage run -m pytest tests/
+                        ${PYTHON_PATH}\\coverage report -m
+                        ${PYTHON_PATH}\\coverage html
+                    """
+                }
+            }
+            post {
+                always {
+                    publishHTML(target: [
+                        allowMissing: false,
+                        alwaysLinkToLastBuild: true,
+                        keepAll: true,
+                        reportDir: 'htmlcov',
+                        reportFiles: 'index.html',
+                        reportName: 'Coverage Report'
+                    ])
+                }
+            }
+        }
+
+        stage('Security Scan') {
+            steps {
+                script {
+                    echo "Running security scan with bandit..."
+                    bat """
+                        ${PYTHON_PATH}\\bandit -r . -f txt -o bandit-report.txt || exit 0
+                        type bandit-report.txt
+                    """
+                }
+            }
+            post {
+                always {
+                    archiveArtifacts artifacts: 'bandit-report.txt', allowEmptyArchive: true
+                }
+            }
+        }
+
+        stage('Deploy') {
+            steps {
+                script {
+                    echo "Deploying application..."
+                    echo "Student: Hassan Khalil"
+                    echo "ID: 202300935"
+                    echo "Deployment successful - Application is ready!"
+
+                    // Create a deployment artifact
+                    bat """
+                        echo Deployment Info > deployment-info.txt
+                        echo Student: Hassan Khalil >> deployment-info.txt
+                        echo ID: 202300935 >> deployment-info.txt
+                        echo Deployment Time: %date% %time% >> deployment-info.txt
+                        echo Application deployed successfully! >> deployment-info.txt
+                    """
+                }
+            }
+            post {
+                success {
+                    archiveArtifacts artifacts: 'deployment-info.txt', allowEmptyArchive: true
+                }
+            }
+        }
+    }
+
+    post {
+        always {
+            echo "Pipeline execution completed!"
+            echo "Build Status: ${currentBuild.result}"
+        }
+        success {
+            echo "All stages passed successfully!"
+        }
+        failure {
+            echo "Pipeline failed. Please check the logs."
+        }
+    }
+}
